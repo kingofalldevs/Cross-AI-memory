@@ -1475,7 +1475,7 @@ async def authorize(request: Request) -> HTMLResponse:
                     fetch('/oauth/verify_firebase_token', {{
                         method: 'POST',
                         headers: {{ 'Content-Type': 'application/json' }},
-                        body: JSON.stringify({{ idToken: idToken, client_id: "{client_id}" }})
+                        body: JSON.stringify({{ idToken: idToken, client_id: "{client_id}", redirect_uri: "{redirect_uri}" }})
                     }})
                     .then(response => response.json())
                     .then(data => {{
@@ -1535,12 +1535,13 @@ async def oauth_verify_firebase(request: Request) -> JSONResponse:
         body = await request.json()
         id_token = body.get("idToken")
         client_id = body.get("client_id")
+        redirect_uri = body.get("redirect_uri", "")
         
         # Log verify token parameters
         try:
             log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "auth_attempts.log")
             with open(log_path, "a", encoding="utf-8") as f:
-                f.write(f"[{datetime.utcnow().isoformat()}] [VERIFY] client_id={client_id} id_token_length={len(id_token) if id_token else 0}\n")
+                f.write(f"[{datetime.utcnow().isoformat()}] [VERIFY] client_id={client_id} redirect_uri={redirect_uri} id_token_length={len(id_token) if id_token else 0}\n")
         except Exception as e:
             pass
         
@@ -1553,19 +1554,44 @@ async def oauth_verify_firebase(request: Request) -> JSONResponse:
             return JSONResponse({"status": "error", "message": "No email found in token"}, status_code=400)
             
         client_name = "Generic AI"
+        
+        # 1. Infer from redirect_uri
+        ru_lower = (redirect_uri or "").lower()
+        if "grok" in ru_lower: client_name = "Grok"
+        elif "claude" in ru_lower: client_name = "Claude"
+        elif "chatgpt" in ru_lower or "openai" in ru_lower: client_name = "ChatGPT"
+        elif "cursor" in ru_lower: client_name = "Cursor"
+        elif "windsurf" in ru_lower: client_name = "Windsurf"
+        elif "manus" in ru_lower: client_name = "Manus"
+        
+        # 2. Infer from client_id
+        if client_name == "Generic AI" and client_id:
+            cid_lower = client_id.lower()
+            if "grok" in cid_lower: client_name = "Grok"
+            elif "claude" in cid_lower: client_name = "Claude"
+            elif "chatgpt" in cid_lower or "openai" in cid_lower: client_name = "ChatGPT"
+            elif "cursor" in cid_lower: client_name = "Cursor"
+            elif "windsurf" in cid_lower: client_name = "Windsurf"
+            elif "manus" in cid_lower: client_name = "Manus"
+            
+        # 3. Database lookup override
+        db_client_name = None
         if client_id:
             if DATABASE_URL:
                 with psycopg2.connect(DATABASE_URL) as conn:
                     with conn.cursor() as cursor:
                         cursor.execute('SELECT client_name FROM oauth_clients WHERE client_id = %s', (client_id,))
                         row = cursor.fetchone()
-                        if row: client_name = row[0]
+                        if row: db_client_name = row[0]
             else:
                 with sqlite3.connect(DB_PATH) as conn:
                     cursor = conn.cursor()
                     cursor.execute('SELECT client_name FROM oauth_clients WHERE client_id = ?', (client_id,))
                     row = cursor.fetchone()
-                    if row: client_name = row[0]
+                    if row: db_client_name = row[0]
+                    
+        if db_client_name and db_client_name != "Generic AI":
+            client_name = db_client_name
             
         auth_code = str(uuid.uuid4())
         created_at = datetime.utcnow().isoformat()
