@@ -1496,6 +1496,7 @@ async def authorize(request: Request) -> HTMLResponse:
             // Always sign out to force account selection and show the sign-in options
             firebase.auth().signOut().then(function() {{
                 const ui = new firebaseui.auth.AuthUI(firebase.auth());
+                ui.disableAutoSignIn();
                 const uiConfig = {{
                     callbacks: {{
                         signInSuccessWithAuthResult: function(authResult, redirectUrl) {{
@@ -1507,6 +1508,7 @@ async def authorize(request: Request) -> HTMLResponse:
                         }}
                     }},
                     signInFlow: 'popup',
+                    credentialHelper: firebaseui.auth.CredentialHelper.NONE,
                     signInOptions: [ 
                         {{
                             provider: firebase.auth.GoogleAuthProvider.PROVIDER_ID,
