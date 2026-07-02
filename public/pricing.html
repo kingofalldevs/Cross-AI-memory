@@ -584,7 +584,7 @@
             
             <div class="price-container">
                 <span class="currency">$</span>
-                <span class="price" id="pro-price">9</span>
+                <span class="price" id="pro-price">5</span>
                 <span class="billing-cycle" id="pro-cycle">/mo</span>
             </div>
             
@@ -709,13 +709,13 @@
             if (cycle === 'annual') {
                 btnMonthly.classList.remove('active');
                 btnAnnual.classList.add('active');
-                // 20% discount: $9 * 0.8 = $7.20/mo
-                proPrice.innerText = '7.20';
+                // 20% discount: $5 * 0.8 = $4.00/mo
+                proPrice.innerText = '4.00';
                 proCycle.innerText = '/mo, billed annually';
             } else {
                 btnAnnual.classList.remove('active');
                 btnMonthly.classList.add('active');
-                proPrice.innerText = '9';
+                proPrice.innerText = '5';
                 proCycle.innerText = '/mo';
             }
         }
