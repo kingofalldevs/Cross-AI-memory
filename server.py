@@ -361,17 +361,14 @@ class AuthMiddleware:
             
             user_agent = request.headers.get("user-agent", "")
             
-            if db_client_name:
-                # If we have a registered OAuth client name, prioritize it (e.g. Grok, Manus, etc.)
-                client_name = db_client_name
-                # Normalize capitalization
-                if "grok" in client_name.lower():
-                    client_name = "Grok"
-                elif "claude" in client_name.lower():
-                    client_name = "Claude"
-                elif "manus" in client_name.lower():
-                    client_name = "Manus"
-            elif client_name_param:
+            # Determine client name by prioritizing:
+            # 1. Query parameter or header override (client_name_param)
+            # 2. Known user-agent signature (get_client_name_from_user_agent)
+            # 3. Database client name registered with the token (db_client_name)
+            client_name = None
+            
+            # 1. Check query parameter/header override
+            if client_name_param:
                 param_lower = client_name_param.lower()
                 if "manus" in param_lower:
                     client_name = "Manus"
@@ -383,7 +380,26 @@ class AuthMiddleware:
                     client_name = "ChatGPT"
                 else:
                     client_name = client_name_param.title()
-            else:
+            
+            # 2. Check user-agent signature
+            if not client_name:
+                ua_client = get_client_name_from_user_agent(user_agent)
+                if ua_client != "Generic AI":
+                    client_name = ua_client
+                    
+            # 3. Check database client name (if not generic)
+            if not client_name and db_client_name and db_client_name != "Generic AI":
+                client_name = db_client_name
+                # Normalize capitalization
+                if "grok" in db_client_name.lower():
+                    client_name = "Grok"
+                elif "claude" in db_client_name.lower():
+                    client_name = "Claude"
+                elif "manus" in db_client_name.lower():
+                    client_name = "Manus"
+                    
+            # 4. Fallback to generic / user-agent default
+            if not client_name:
                 client_name = get_client_name_from_user_agent(user_agent)
                 
             client_name_var.set(client_name)
@@ -1400,7 +1416,16 @@ async def authorize(request: Request) -> HTMLResponse:
     """The OAuth 2.0 Authorization Endpoint. Displays the Firebase Login page."""
     redirect_uri = request.query_params.get("redirect_uri")
     state = request.query_params.get("state")
+    client_id = request.query_params.get("client_id") or ""
     
+    # Log the attempt to a file in the workspace
+    try:
+        log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "auth_attempts.log")
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"[{datetime.utcnow().isoformat()}] [AUTHORIZE] redirect_uri={redirect_uri} client_id={client_id} state={state} user_agent={request.headers.get('user-agent')}\n")
+    except Exception as e:
+        print(f"Error writing to auth_attempts.log: {e}")
+        
     if not redirect_uri:
         return HTMLResponse("<h1>Missing redirect_uri parameter</h1>", status_code=400)
     
@@ -1450,7 +1475,7 @@ async def authorize(request: Request) -> HTMLResponse:
                     fetch('/oauth/verify_firebase_token', {{
                         method: 'POST',
                         headers: {{ 'Content-Type': 'application/json' }},
-                        body: JSON.stringify({{ idToken: idToken }})
+                        body: JSON.stringify({{ idToken: idToken, client_id: "{client_id}" }})
                     }})
                     .then(response => response.json())
                     .then(data => {{
@@ -1468,33 +1493,32 @@ async def authorize(request: Request) -> HTMLResponse:
                 }});
             }}
 
-            const ui = new firebaseui.auth.AuthUI(firebase.auth());
-            const uiConfig = {{
-                callbacks: {{
-                    signInSuccessWithAuthResult: function(authResult, redirectUrl) {{
-                        approveOAuth(authResult.user);
-                        return false;
+            // Always sign out to force account selection and show the sign-in options
+            firebase.auth().signOut().then(function() {{
+                const ui = new firebaseui.auth.AuthUI(firebase.auth());
+                const uiConfig = {{
+                    callbacks: {{
+                        signInSuccessWithAuthResult: function(authResult, redirectUrl) {{
+                            approveOAuth(authResult.user);
+                            return false;
+                        }},
+                        uiShown: function() {{
+                            document.getElementById('loader').style.display = 'none';
+                        }}
                     }},
-                    uiShown: function() {{
-                        document.getElementById('loader').style.display = 'none';
-                    }}
-                }},
-                signInFlow: 'popup',
-                signInOptions: [ 
-                    {{
-                        provider: firebase.auth.GoogleAuthProvider.PROVIDER_ID,
-                        customParameters: {{ prompt: 'select_account' }}
-                    }}
-                ]
-            }};
-
-            firebase.auth().onAuthStateChanged(function(user) {{
-                if (user) {{
-                    approveOAuth(user);
-                }} else {{
-                    document.getElementById('loader').style.display = 'none';
-                    ui.start('#firebaseui-auth-container', uiConfig);
-                }}
+                    signInFlow: 'popup',
+                    signInOptions: [ 
+                        {{
+                            provider: firebase.auth.GoogleAuthProvider.PROVIDER_ID,
+                            customParameters: {{ prompt: 'select_account' }}
+                        }}
+                    ]
+                }};
+                
+                document.getElementById('loader').style.display = 'none';
+                ui.start('#firebaseui-auth-container', uiConfig);
+            }}).catch(function(err) {{
+                console.error("Sign out error:", err);
             }});
         </script>
     </body>
@@ -1509,6 +1533,14 @@ async def oauth_verify_firebase(request: Request) -> JSONResponse:
         body = await request.json()
         id_token = body.get("idToken")
         client_id = body.get("client_id")
+        
+        # Log verify token parameters
+        try:
+            log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "auth_attempts.log")
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(f"[{datetime.utcnow().isoformat()}] [VERIFY] client_id={client_id} id_token_length={len(id_token) if id_token else 0}\n")
+        except Exception as e:
+            pass
         
         if not id_token:
             return JSONResponse({"status": "error", "message": "Missing idToken"}, status_code=400)
