@@ -6,6 +6,10 @@ import psycopg2
 from datetime import datetime
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
+import base64
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.backends import default_backend
 from cryptography.fernet import Fernet
 
 import contextvars
@@ -25,41 +29,49 @@ load_dotenv()
 # Set up symmetric encryption key for secure user memories at rest
 ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY")
 if not ENCRYPTION_KEY:
-    try:
-        ENCRYPTION_KEY = Fernet.generate_key().decode()
-        env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
-        if os.path.exists(env_path):
-            with open(env_path, "a") as f:
-                f.write(f"\nENCRYPTION_KEY={ENCRYPTION_KEY}\n")
-        else:
-            with open(env_path, "w") as f:
-                f.write(f"ENCRYPTION_KEY={ENCRYPTION_KEY}\n")
-        print("Generated new ENCRYPTION_KEY and saved to .env")
-    except Exception as e:
-        print(f"Error auto-generating ENCRYPTION_KEY: {e}")
-        ENCRYPTION_KEY = ""
+    print("WARNING: ENCRYPTION_KEY not set in environment variables.")
 
-def encrypt_content(plain_text: str) -> str:
-    """Encrypts text using the server-wide Fernet key."""
-    if not plain_text or not ENCRYPTION_KEY:
+def get_user_key(user_email: str) -> bytes:
+    if not ENCRYPTION_KEY:
+        raise ValueError("ENCRYPTION_KEY is not set.")
+    salt = f"rulip_salt_{user_email}".encode('utf-8')
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=100000,
+        backend=default_backend()
+    )
+    key = kdf.derive(ENCRYPTION_KEY.encode('utf-8'))
+    return base64.urlsafe_b64encode(key)
+
+def encrypt_content(plain_text: str, user_email: str) -> str:
+    """Encrypts text using a unique key derived from the user's email."""
+    if not plain_text or not ENCRYPTION_KEY or not user_email:
         return plain_text or ""
     try:
-        f = Fernet(ENCRYPTION_KEY.encode())
+        user_key = get_user_key(user_email)
+        f = Fernet(user_key)
         return f.encrypt(plain_text.encode()).decode("utf-8")
     except Exception as e:
         print(f"[CRYPTO] Encryption error: {e}")
         return plain_text
 
-def decrypt_content(encrypted_text: str) -> str:
-    """Decrypts text. Falls back to plain text if decryption fails (for legacy memories)."""
-    if not encrypted_text or not ENCRYPTION_KEY:
+def decrypt_content(encrypted_text: str, user_email: str) -> str:
+    """Decrypts text using the derived user key, falls back to master key, then plaintext."""
+    if not encrypted_text or not ENCRYPTION_KEY or not user_email:
         return encrypted_text or ""
     try:
-        f = Fernet(ENCRYPTION_KEY.encode())
+        user_key = get_user_key(user_email)
+        f = Fernet(user_key)
         return f.decrypt(encrypted_text.encode()).decode("utf-8")
     except Exception:
-        # Fallback to plain text for legacy memories
-        return encrypted_text
+        # Fallback to master key for legacy memories
+        try:
+            f = Fernet(ENCRYPTION_KEY.encode())
+            return f.decrypt(encrypted_text.encode()).decode("utf-8")
+        except Exception:
+            return encrypted_text
 # We use a ContextVar to store the user's email securely across the async call chain
 user_email_var = contextvars.ContextVar("user_email", default=None)
 client_name_var = contextvars.ContextVar("client_name", default="Generic AI")
@@ -420,7 +432,7 @@ def save_memory(content: str) -> str:
         return json.dumps({"status": "error", "message": "Unauthorized. Cannot determine user."})
 
     client_name = client_name_var.get()
-    encrypted_content = encrypt_content(content)
+    encrypted_content = encrypt_content(content, user_email)
 
     try:
         timestamp = datetime.utcnow().isoformat() + "Z"
@@ -480,7 +492,7 @@ def search_memory(query: str, client_name: str = None) -> str:
         # Decrypt content and filter by query in-memory
         results = []
         for r in rows:
-            decrypted = decrypt_content(r[2])
+            decrypted = decrypt_content(r[2], user_email)
             if not query or query.lower() in decrypted.lower():
                 results.append({
                     "memory_number": r[0],
@@ -522,7 +534,7 @@ def list_memories(limit: int = 10, client_name: str = None) -> str:
             results.append({
                 "memory_number": r[0],
                 "timestamp": r[1],
-                "content": decrypt_content(r[2]),
+                "content": decrypt_content(r[2], user_email),
                 "client_name": r[3]
             })
         return json.dumps({"status": "success", "results": results}, indent=2)
@@ -541,7 +553,7 @@ def update_memory(memory_number: int, content: str) -> str:
     if not user_email:
         return json.dumps({"status": "error", "message": "Unauthorized. Cannot determine user."})
         
-    encrypted_content = encrypt_content(content)
+    encrypted_content = encrypt_content(content, user_email)
     try:
         updated = False
         if DATABASE_URL:
@@ -1115,12 +1127,12 @@ async def api_memories(request: Request) -> JSONResponse:
                     cursor.execute('SELECT user_memory_index, timestamp, content, client_name FROM memories WHERE user_email = %s ORDER BY user_memory_index DESC', (email,))
                     results = cursor.fetchall()
                     for r in results:
-                        r["content"] = decrypt_content(r["content"])
+                        r["content"] = decrypt_content(r["content"], email)
         else:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute('SELECT user_memory_index, timestamp, content, client_name FROM memories WHERE user_email = ? ORDER BY user_memory_index DESC', (email,))
-                results = [{"user_memory_index": row[0], "timestamp": row[1], "content": decrypt_content(row[2]), "client_name": row[3]} for row in cursor.fetchall()]
+                results = [{"user_memory_index": row[0], "timestamp": row[1], "content": decrypt_content(row[2], email), "client_name": row[3]} for row in cursor.fetchall()]
                 
         return JSONResponse({"status": "success", "results": results})
     except Exception as e:
@@ -1147,7 +1159,7 @@ async def api_create_memory(request: Request) -> JSONResponse:
         if not content:
             return JSONResponse({"status": "error", "message": "Missing content"}, status_code=400)
             
-        encrypted_content = encrypt_content(content)
+        encrypted_content = encrypt_content(content, email)
         timestamp = datetime.utcnow().isoformat() + "Z"
         
         if DATABASE_URL:
@@ -1193,7 +1205,7 @@ async def api_update_memory(request: Request) -> JSONResponse:
         if not content:
             return JSONResponse({"status": "error", "message": "Missing content"}, status_code=400)
             
-        encrypted_content = encrypt_content(content)
+        encrypted_content = encrypt_content(content, email)
         updated = False
         
         if DATABASE_URL:
