@@ -1252,6 +1252,12 @@
             // Listen for auth state changes
             firebase.auth().onAuthStateChanged(function(user) {
                 if (user) {
+                    if (user.email !== 'mrprincekofiasante.123@gmail.com') {
+                        firebase.auth().signOut();
+                        document.getElementById('auth-error-banner').style.display = 'block';
+                        document.getElementById('auth-error-banner').innerText = "Access Denied: Only mrprincekofiasante.123@gmail.com is allowed to access the admin dashboard.";
+                        return;
+                    }
                     // Authenticated
                     document.getElementById('login-view').style.display = 'none';
                     document.getElementById('main-header').style.display = 'none';

@@ -59,7 +59,7 @@
         nav {
             position: sticky;
             top: 0;
-            margin: 0 30px 0 30px;
+            margin: 0;
             padding: 0.4rem 2rem;
             display: flex;
             justify-content: space-between;
@@ -484,8 +484,8 @@
         }
 
         .cta-btn-primary {
-            background: #0f172a;
-            color: white;
+            background: var(--bg-color);
+            color: #0f172a;
             padding: 0.85rem 2rem;
             border-radius: 12px;
             font-weight: 600;
@@ -493,10 +493,11 @@
             text-decoration: none;
             transition: all 0.2s;
             box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+            border: 2px solid var(--primary);
         }
 
         .cta-btn-primary:hover {
-            background: #1e293b;
+            background: #f8fafc;
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(15, 23, 42, 0.18);
         }
@@ -1076,7 +1077,7 @@
 
 
             <div style="margin-top: 3rem; margin-bottom: 2rem; z-index: 10; position: relative; width: 100%; display: flex; justify-content: center;">
-                <a href="/signup" class="btn" style="padding: 1rem 3rem; font-size: 1.1rem; border-radius: 12px; font-weight: 700; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);">Get Started</a>
+                <a href="/signup" class="btn" style="background: var(--bg-color); color: #0f172a; border: 2px solid var(--primary); padding: 1rem 3rem; font-size: 1.1rem; border-radius: 12px; font-weight: 700; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);">Get Started</a>
             </div>
 
             <!-- Landing Video -->
@@ -1094,7 +1095,7 @@
             ">
                 <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
                     <iframe
-                        src="https://player.vimeo.com/video/1205849484?autoplay=1&loop=1&controls=0"
+                        src="https://player.vimeo.com/video/1205849484?autoplay=1&loop=1&controls=1&muted=1"
                         frameborder="0"
                         allow="autoplay; fullscreen; picture-in-picture"
                         allowfullscreen
