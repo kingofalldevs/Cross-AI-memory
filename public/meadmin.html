@@ -338,7 +338,8 @@
         /* Main Workspace Content */
         .workspace {
             flex: 1;
-            height: 100vh;
+            height: 100%;
+            min-height: 0;
             overflow-y: auto;
             padding: 2.5rem 3.5rem;
             display: flex;
@@ -1514,7 +1515,7 @@
                 const deviceStr = getDeviceFromUserAgent(evt.user_agent);
 
                 tr.innerHTML = `
-                    <td style="font-family: monospace; font-size: 0.8rem; color: var(--text-secondary);" title="${evt.session_id}">${evt.session_id.substring(0, 8)}...</td>
+                    <td style="font-family: monospace; font-size: 0.8rem; color: var(--text-secondary);" title="${evt.session_id || ''}">${(evt.session_id || '').substring(0, 8)}...</td>
                     <td class="email-cell">${displayEmail}</td>
                     <td>${actionBadge}</td>
                     <td style="font-family: monospace; font-size: 0.82rem; max-width: 150px; overflow: hidden; text-overflow: ellipsis;" title="${evt.target_name}">${evt.target_name}</td>
