@@ -1238,16 +1238,19 @@
                 </div>
                 <h3 style="font-size: 1.85rem; font-weight: 800; color: #1e293b; margin: 0.75rem 0 0.5rem 0; letter-spacing: -0.02em;">Designed with Security in Mind</h3>
                 <p style="font-size: 1.05rem; color: #64748b; line-height: 1.6; max-width: 650px; margin: 0;">
-                    Your privacy is our absolute priority. No one—not even us—can ever see your chats. We use local symmetric cryptographic encryption to lock your memories, keeping them 100% private.
+                    Your privacy is our absolute priority. We use robust symmetric cryptographic encryption to lock your memories, keeping them private. Your data is encrypted in transit and safely stored on our servers.
                 </p>
             </div>
             
-            <div style="position: relative; width: 100%; border-radius: 16px; overflow: hidden; border: none; background: transparent; padding: 1.5rem; display: flex; justify-content: center; align-items: center;">
-                <img src="/static/security-diagram.png?v=2" alt="Security Data Flow Diagram" style="max-width: 100%; height: auto; border-radius: 8px;">
+            <div style="position: relative; width: 100%; border-radius: 16px; overflow: hidden; border: none; background: transparent; padding: 1.5rem; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                <img src="/static/security-storyset.svg" alt="Security Data Flow Diagram" style="width: 100%; max-width: 500px; height: auto; border-radius: 8px; transform: scale(1.15);">
+                <div style="opacity: 0.03; font-size: 0.6rem; text-align: center; margin-top: 4px;">
+                    <a href="https://storyset.com/technology" style="color: inherit; text-decoration: none; cursor: default;">Technology illustrations by Storyset</a>
+                </div>
             </div>
 
             <p style="font-size: 0.95rem; color: #64748b; line-height: 1.6; max-width: 650px; margin: 0;">
-                Your raw chat data never reaches our servers. All encryption and storage occur entirely within your own private deployment context, making your memories mathematically unreadable to database administrators, hosts, or third parties. Only your authenticated AI client can decrypt and access them in real-time.
+                All encryption and storage occur entirely within your own private deployment context using Fernet cryptography tied to your account. This ensures your memories remain secure and isolated. Only your authenticated AI client or dashboard can access them in real-time.
             </p>
         </div>
     </div>
@@ -1267,7 +1270,7 @@
                 </button>
                 <div class="faq-answer-wrapper">
                     <div class="faq-answer">
-                        Rulip runs as a lightweight, secure local server and exposes a standard Model Context Protocol (MCP) server. You can add it directly to ChatGPT, Claude, Cursor, Windsurf, or Manus. It automatically captures and saves context, allowing you to access it from any other platform.
+                        Rulip provides a secure, cloud-hosted Model Context Protocol (MCP) server via a standard SSE connection. You can add it directly to ChatGPT, Claude, Grok, or Manus without needing to install any local software. It acts as a bridge, automatically capturing and saving context so you can access it from any other platform.
                     </div>
                 </div>
             </div>
@@ -1278,7 +1281,7 @@
                 </button>
                 <div class="faq-answer-wrapper">
                     <div class="faq-answer">
-                        Yes, absolutely. Your data is stored securely in your private account and is encrypted in transit and at rest. We never share your data or use it to train models without your explicit consent.
+                        Yes, absolutely. Your data is stored securely in your private account and is encrypted in transit and at rest. We never share your data or use it to train models.
                     </div>
                 </div>
             </div>
@@ -1289,7 +1292,7 @@
                 </button>
                 <div class="faq-answer-wrapper">
                     <div class="faq-answer">
-                        Out of the box, Rulip supports ChatGPT (web), Claude (web/desktop), Cursor (IDE), Windsurf (IDE), and Manus. Any tool or client that supports Model Context Protocol (MCP) can connect to Rulip.
+                        Out of the box, Rulip supports ChatGPT (web), Claude (web/desktop), Grok, and Manus. Any tool or client that supports Model Context Protocol (MCP) can connect to Rulip.
                     </div>
                 </div>
             </div>
@@ -1311,7 +1314,7 @@
                 </button>
                 <div class="faq-answer-wrapper">
                     <div class="faq-answer">
-                        No! You can start using Rulip for free. The free plan includes full access to local integrations, basic memory storage, and dashboard access.
+                        No! You can start using Rulip for free. The free plan includes full access to all AI integrations, up to 50 memories saved, and full dashboard access.
                     </div>
                 </div>
             </div>
