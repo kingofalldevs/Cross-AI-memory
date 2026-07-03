@@ -819,7 +819,7 @@ async def api_admin_stats(request: Request) -> JSONResponse:
                     landing_clicks_rows = cursor.fetchall()
                     
                     # 10. Recent landing events
-                    cursor.execute("SELECT session_id, user_email, event_type, target_name, timestamp, user_agent, referrer, ip_address, location FROM landing_events ORDER BY timestamp DESC LIMIT 30")
+                    cursor.execute("SELECT session_id, user_email, event_type, target_name, timestamp, user_agent, referrer, ip_address, location FROM landing_events ORDER BY timestamp DESC LIMIT 200")
                     landing_recent_rows = cursor.fetchall()
         else:
             with sqlite3.connect(DB_PATH) as conn:
@@ -874,7 +874,7 @@ async def api_admin_stats(request: Request) -> JSONResponse:
                 landing_clicks_rows = cursor.fetchall()
                 
                 # 10. Recent landing events
-                cursor.execute("SELECT session_id, user_email, event_type, target_name, timestamp, user_agent, referrer, ip_address, location FROM landing_events ORDER BY timestamp DESC LIMIT 30")
+                cursor.execute("SELECT session_id, user_email, event_type, target_name, timestamp, user_agent, referrer, ip_address, location FROM landing_events ORDER BY timestamp DESC LIMIT 200")
                 landing_recent_rows = cursor.fetchall()
                 
         # Post-process data
