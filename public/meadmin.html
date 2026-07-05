@@ -1665,10 +1665,16 @@
                         badges += getClientBadgeHTML(c.trim()) + ' ';
                     }
                 });
+                
+                let userAgentsHtml = '';
+                if (user.user_agents && user.user_agents.length > 0) {
+                    const uaString = user.user_agents.join(' | ').replace(/"/g, '&quot;');
+                    userAgentsHtml = `<div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 4px; max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${uaString}">UA: ${user.user_agents[0]}</div>`;
+                }
 
                 tr.innerHTML = `
                     <td class="email-cell">${user.email}</td>
-                    <td class="badge-list">${badges || '<span style="color: var(--text-muted); font-style: italic;">None</span>'}</td>
+                    <td class="badge-list">${badges || '<span style="color: var(--text-muted); font-style: italic;">None</span>'}${userAgentsHtml}</td>
                     <td>${user.last_client ? getClientBadgeHTML(user.last_client) : '<span style="color: var(--text-muted);">None</span>'}</td>
                     <td style="color: var(--text-secondary); font-size: 0.85rem;">${lastActiveDate}</td>
                 `;

@@ -792,6 +792,14 @@ async def api_admin_stats(request: Request) -> JSONResponse:
                     cursor.execute("SELECT user_email, client_name, last_active, user_agent FROM client_connections")
                     connections_rows = cursor.fetchall()
                     
+                    # 4b. Clients from memories
+                    cursor.execute("SELECT user_email, client_name, MAX(timestamp) FROM memories WHERE user_email IS NOT NULL AND user_email != '' GROUP BY user_email, client_name")
+                    memories_clients_rows = cursor.fetchall()
+
+                    # 4c. Clients from oauth_sessions
+                    cursor.execute("SELECT user_email, client_name, MAX(created_at) FROM oauth_sessions WHERE user_email IS NOT NULL AND user_email != '' GROUP BY user_email, client_name")
+                    oauth_clients_rows = cursor.fetchall()
+                    
                     # 5. Client breakdown
                     cursor.execute("SELECT client_name, COUNT(*) FROM memories GROUP BY client_name ORDER BY COUNT(*) DESC")
                     breakdown_rows = cursor.fetchall()
@@ -846,6 +854,14 @@ async def api_admin_stats(request: Request) -> JSONResponse:
                 # 4. Client connections
                 cursor.execute("SELECT user_email, client_name, last_active, user_agent FROM client_connections")
                 connections_rows = cursor.fetchall()
+
+                # 4b. Clients from memories
+                cursor.execute("SELECT user_email, client_name, MAX(timestamp) FROM memories WHERE user_email IS NOT NULL AND user_email != '' GROUP BY user_email, client_name")
+                memories_clients_rows = cursor.fetchall()
+
+                # 4c. Clients from oauth_sessions
+                cursor.execute("SELECT user_email, client_name, MAX(created_at) FROM oauth_sessions WHERE user_email IS NOT NULL AND user_email != '' GROUP BY user_email, client_name")
+                oauth_clients_rows = cursor.fetchall()
                 
                 # 5. Client breakdown
                 cursor.execute("SELECT client_name, COUNT(*) FROM memories GROUP BY client_name ORDER BY COUNT(*) DESC")
@@ -897,6 +913,7 @@ async def api_admin_stats(request: Request) -> JSONResponse:
             user_connections_map[email_addr] = {
                 "email": email_addr,
                 "clients": [],
+                "user_agents": [],
                 "last_active": None,
                 "last_client": None
             }
@@ -906,7 +923,10 @@ async def api_admin_stats(request: Request) -> JSONResponse:
             if not user_email:
                 continue
             if user_email in user_connections_map:
-                user_connections_map[user_email]["clients"].append(client_name)
+                if client_name:
+                    user_connections_map[user_email]["clients"].append(client_name)
+                if user_agent:
+                    user_connections_map[user_email]["user_agents"].append(user_agent)
                 dt = parse_iso_datetime(last_active_str)
                 if dt:
                     if (now - dt).total_seconds() <= 86400:
@@ -914,14 +934,53 @@ async def api_admin_stats(request: Request) -> JSONResponse:
                     current_last_active = user_connections_map[user_email]["last_active"]
                     if not current_last_active or last_active_str > current_last_active:
                         user_connections_map[user_email]["last_active"] = last_active_str
-                        user_connections_map[user_email]["last_client"] = client_name
-                        
+                        if client_name:
+                            user_connections_map[user_email]["last_client"] = client_name
+
+        for row in memories_clients_rows:
+            user_email, client_name, last_active_str = row
+            if not user_email: continue
+            if user_email in user_connections_map:
+                if client_name:
+                    user_connections_map[user_email]["clients"].append(client_name)
+                dt = parse_iso_datetime(last_active_str)
+                if dt:
+                    if (now - dt).total_seconds() <= 86400:
+                        active_users_24h_set.add(user_email)
+                    current_last_active = user_connections_map[user_email]["last_active"]
+                    if not current_last_active or last_active_str > current_last_active:
+                        user_connections_map[user_email]["last_active"] = last_active_str
+                        if client_name:
+                            user_connections_map[user_email]["last_client"] = client_name
+
+        for row in oauth_clients_rows:
+            user_email, client_name, last_active_str = row
+            if not user_email: continue
+            if user_email in user_connections_map:
+                if client_name:
+                    user_connections_map[user_email]["clients"].append(client_name)
+                dt = parse_iso_datetime(last_active_str)
+                if dt:
+                    if (now - dt).total_seconds() <= 86400:
+                        active_users_24h_set.add(user_email)
+                    current_last_active = user_connections_map[user_email]["last_active"]
+                    if not current_last_active or last_active_str > current_last_active:
+                        user_connections_map[user_email]["last_active"] = last_active_str
+                        if client_name:
+                            user_connections_map[user_email]["last_client"] = client_name
+
         users_list = []
         for email_addr, udata in user_connections_map.items():
             unique_clients = sorted(list(set(udata["clients"])))
+            if len(unique_clients) > 1 and "Generic AI" in unique_clients:
+                unique_clients.remove("Generic AI")
+            
+            unique_user_agents = sorted(list(set(udata["user_agents"])))
+            
             users_list.append({
                 "email": email_addr,
                 "clients": ", ".join(unique_clients),
+                "user_agents": unique_user_agents,
                 "last_active": udata["last_active"],
                 "last_client": udata["last_client"]
             })
