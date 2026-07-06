@@ -409,12 +409,33 @@ class AuthMiddleware:
                     client_name = "Claude"
                 elif "manus" in db_client_name.lower():
                     client_name = "Manus"
-                    
+                elif "chatgpt" in db_client_name.lower() or "openai" in db_client_name.lower():
+                    client_name = "ChatGPT"
+                elif "cursor" in db_client_name.lower():
+                    client_name = "Cursor"
+                elif "windsurf" in db_client_name.lower():
+                    client_name = "Windsurf"
             # 4. Fallback to generic / user-agent default
             if not client_name:
                 client_name = get_client_name_from_user_agent(user_agent)
                 
             client_name_var.set(client_name)
+            
+            # If we discovered a specific client name and db only had Generic AI, update it
+            if db_client_name == "Generic AI" and client_name != "Generic AI":
+                try:
+                    if DATABASE_URL:
+                        with psycopg2.connect(DATABASE_URL) as conn:
+                            with conn.cursor() as cursor:
+                                cursor.execute("UPDATE oauth_sessions SET client_name = %s WHERE access_token = %s", (client_name, token))
+                            conn.commit()
+                    else:
+                        with sqlite3.connect(DB_PATH) as conn:
+                            cursor = conn.cursor()
+                            cursor.execute("UPDATE oauth_sessions SET client_name = ? WHERE access_token = ?", (client_name, token))
+                            conn.commit()
+                except Exception as e:
+                    print(f"Error updating oauth_sessions client name: {e}")
             
             # Record client connection activity
             try:
@@ -763,9 +784,18 @@ async def api_admin_stats(request: Request) -> JSONResponse:
         is_dev_mode = len(ADMIN_EMAILS) == 0
         if not is_dev_mode and email_lower not in ADMIN_EMAILS:
             return JSONResponse({"status": "error", "message": f"User {email} is not authorized as an administrator."}, status_code=403)
+            # Fetch actual user list from Firebase Auth
+        try:
+            firebase_users = firebase_auth.list_users().iterate_all()
+            all_emails = [u.email for u in firebase_users if u.email]
+        except Exception as e:
+            print(f"Error fetching Firebase users: {e}")
+            all_emails = []
             
-        db_engine = "PostgreSQL" if DATABASE_URL else "SQLite"
+        total_users = len(all_emails)
         
+        db_engine = "PostgreSQL" if DATABASE_URL else "SQLite"
+
         if DATABASE_URL:
             with psycopg2.connect(DATABASE_URL) as conn:
                 with conn.cursor() as cursor:
@@ -777,17 +807,9 @@ async def api_admin_stats(request: Request) -> JSONResponse:
                     cursor.execute("SELECT COUNT(*) FROM oauth_sessions")
                     total_sessions = cursor.fetchone()[0]
                     
-                    # 3. All emails
-                    cursor.execute("""
-                        SELECT DISTINCT user_email FROM oauth_sessions WHERE user_email IS NOT NULL AND user_email != ''
-                        UNION
-                        SELECT DISTINCT user_email FROM client_connections WHERE user_email IS NOT NULL AND user_email != ''
-                        UNION
-                        SELECT DISTINCT user_email FROM memories WHERE user_email IS NOT NULL AND user_email != ''
-                    """)
-                    all_emails = [row[0] for row in cursor.fetchall()]
-                    total_users = len(all_emails)
+                    # 3. All emails (Fetched from Firebase above)
                     
+
                     # 4. Client connections
                     cursor.execute("SELECT user_email, client_name, last_active, user_agent FROM client_connections")
                     connections_rows = cursor.fetchall()
@@ -840,17 +862,9 @@ async def api_admin_stats(request: Request) -> JSONResponse:
                 cursor.execute("SELECT COUNT(*) FROM oauth_sessions")
                 total_sessions = cursor.fetchone()[0]
                 
-                # 3. All emails
-                cursor.execute("""
-                    SELECT DISTINCT user_email FROM oauth_sessions WHERE user_email IS NOT NULL AND user_email != ''
-                    UNION
-                    SELECT DISTINCT user_email FROM client_connections WHERE user_email IS NOT NULL AND user_email != ''
-                    UNION
-                    SELECT DISTINCT user_email FROM memories WHERE user_email IS NOT NULL AND user_email != ''
-                """)
-                all_emails = [row[0] for row in cursor.fetchall()]
-                total_users = len(all_emails)
+                # 3. All emails (Fetched from Firebase above)
                 
+
                 # 4. Client connections
                 cursor.execute("SELECT user_email, client_name, last_active, user_agent FROM client_connections")
                 connections_rows = cursor.fetchall()
